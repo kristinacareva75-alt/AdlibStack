@@ -1,6 +1,6 @@
-# Adlib Stack — VST3 для обработки эдлибов (в стиле Travis Scott)
+# Adlib Stack Vol 2 — VST3 для обработки эдлибов (в стиле Travis Scott)
 
-Цепочка: Low Cut -> Drive -> 2 питч-голоса (-12 / +12) -> ping-pong delay -> reverb -> Width -> Dry/Wet
+Цепочка: Low Cut -> Drive -> 2 питч-голоса (-12 / +12) -> ping-pong delay (SYNC по темпу DAW) -> reverb -> Width -> Dry/Wet
 
 ## Как получить плагин без установки компиляторов
 1. Создай репозиторий на GitHub и залей туда содержимое этой папки (включая .github).

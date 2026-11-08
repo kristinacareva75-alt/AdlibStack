@@ -14,15 +14,15 @@ FetchContent_MakeAvailable(JUCE)
 juce_add_plugin(AdlibStack
     COMPANY_NAME "DIY"
     PLUGIN_MANUFACTURER_CODE Diy1
-    PLUGIN_CODE Adlb
+    PLUGIN_CODE Adl2
     FORMATS VST3 Standalone
-    PRODUCT_NAME "Adlib Stack"
+    PRODUCT_NAME "Adlib Stack Vol 2"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
     COPY_PLUGIN_AFTER_BUILD FALSE)
 
-target_sources(AdlibStack PRIVATE Source/PluginProcessor.cpp Source/PluginProcessor.h)
+target_sources(AdlibStack PRIVATE Source/PluginProcessor.cpp Source/PluginProcessor.h Source/PluginEditor.cpp Source/PluginEditor.h)
 
 target_compile_definitions(AdlibStack PUBLIC
     JUCE_WEB_BROWSER=0
