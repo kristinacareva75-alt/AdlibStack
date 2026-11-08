@@ -73,10 +73,12 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
 
-    const juce::String getName() const override { return "Adlib Stack"; }
+    juce::AudioProcessorValueTreeState apvts;
+
+    const juce::String getName() const override { return "Adlib Stack Vol 2"; }
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
-    double getTailLengthSeconds() const override { return 6.0; }
+    double getTailLengthSeconds() const override { return 8.0; }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -89,8 +91,6 @@ public:
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
-    juce::AudioProcessorValueTreeState apvts;
-
     double sr = 44100.0;
     juce::dsp::StateVariableTPTFilter<float> hpf[2];
     PitchShifter shift1[2], shift2[2];

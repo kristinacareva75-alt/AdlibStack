@@ -1,31 +1,48 @@
 #include "PluginProcessor.h"
+#include "PluginEditor.h"
+
+static const juce::StringArray kNoteNames { "1/2", "1/4", "1/4 dotted", "1/4 triplet", "1/8", "1/8 dotted",
+                                            "1/8 triplet", "1/16", "1/16 dotted", "1/16 triplet", "1/32" };
+static const float kNoteBeats[] = { 2.f, 1.f, 1.5f, 2.f / 3.f, 0.5f, 0.75f, 1.f / 3.f, 0.25f, 0.375f, 1.f / 6.f, 0.125f };
 
 juce::AudioProcessorValueTreeState::ParameterLayout AdlibAudioProcessor::createLayout()
 {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
+
+    // scale: множитель для показа (0..1 -> 0..100 %), dec: знаков после запятой
     auto add = [&] (const char* id, const char* name, float lo, float hi, float def,
-                    float skew = 1.f, float step = 0.f)
+                    float skew, float step, const juce::String& unit, float scale, int dec)
     {
+        auto attrs = juce::AudioParameterFloatAttributes()
+            .withStringFromValueFunction ([unit, scale, dec] (float v, int)
+                { return juce::String (v * scale, dec) + (unit.isEmpty() ? juce::String() : " " + unit); })
+            .withValueFromStringFunction ([scale] (const juce::String& t)
+                { return t.getFloatValue() / scale; });
+
         layout.add (std::make_unique<juce::AudioParameterFloat> (
             juce::ParameterID { id, 1 }, name,
-            juce::NormalisableRange<float> (lo, hi, step, skew), def));
+            juce::NormalisableRange<float> (lo, hi, step, skew), def, attrs));
     };
 
-    add ("hpf",    "Low Cut (Hz)",        40.f, 600.f, 140.f, 0.4f);
-    add ("drive",  "Drive",               0.f, 1.f, 0.25f);
-    add ("p1",     "Voice 1 Pitch (st)", -24.f, 24.f, -12.f, 1.f, 1.f);
-    add ("p1mix",  "Voice 1 Level",       0.f, 1.f, 0.5f);
-    add ("p2",     "Voice 2 Pitch (st)", -24.f, 24.f, 12.f, 1.f, 1.f);
-    add ("p2mix",  "Voice 2 Level",       0.f, 1.f, 0.25f);
-    add ("dtime",  "Delay Time (ms)",     60.f, 1000.f, 300.f, 0.5f);
-    add ("dfb",    "Delay Feedback",      0.f, 0.9f, 0.45f);
-    add ("dtone",  "Delay Tone (Hz)",     1000.f, 12000.f, 4500.f, 0.4f);
-    add ("dmix",   "Delay Mix",           0.f, 1.f, 0.3f);
-    add ("rsize",  "Reverb Size",         0.f, 1.f, 0.75f);
-    add ("rmix",   "Reverb Mix",          0.f, 1.f, 0.35f);
-    add ("width",  "Stereo Width",        0.f, 2.f, 1.3f);
-    add ("mix",    "Dry/Wet",             0.f, 1.f, 1.0f);
-    add ("out",    "Output (dB)",        -24.f, 12.f, 0.f);
+    add ("hpf",   "Low Cut",         40.f, 600.f, 140.f, 0.4f, 1.f, "Hz", 1.f, 0);
+    add ("drive", "Drive",           0.f, 1.f, 0.25f, 1.f, 0.01f, "%", 100.f, 0);
+    add ("p1",    "Voice 1 Pitch",  -24.f, 24.f, -12.f, 1.f, 1.f, "st", 1.f, 0);
+    add ("p1mix", "Voice 1 Level",   0.f, 1.f, 0.5f, 1.f, 0.01f, "%", 100.f, 0);
+    add ("p2",    "Voice 2 Pitch",  -24.f, 24.f, 12.f, 1.f, 1.f, "st", 1.f, 0);
+    add ("p2mix", "Voice 2 Level",   0.f, 1.f, 0.25f, 1.f, 0.01f, "%", 100.f, 0);
+
+    layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "dsync", 1 }, "Delay Sync", true));
+    layout.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { "dnote", 1 }, "Delay Note", kNoteNames, 4));
+
+    add ("dtime", "Delay Time",      60.f, 1000.f, 300.f, 0.5f, 1.f, "ms", 1.f, 0);
+    add ("dfb",   "Feedback",        0.f, 0.9f, 0.45f, 1.f, 0.01f, "%", 100.f, 0);
+    add ("dtone", "Delay Tone",      1000.f, 12000.f, 4500.f, 0.4f, 10.f, "Hz", 1.f, 0);
+    add ("dmix",  "Delay Mix",       0.f, 1.f, 0.3f, 1.f, 0.01f, "%", 100.f, 0);
+    add ("rsize", "Reverb Size",     0.f, 1.f, 0.75f, 1.f, 0.01f, "%", 100.f, 0);
+    add ("rmix",  "Reverb Mix",      0.f, 1.f, 0.35f, 1.f, 0.01f, "%", 100.f, 0);
+    add ("width", "Stereo Width",    0.f, 2.f, 1.3f, 1.f, 0.01f, "%", 100.f, 0);
+    add ("mix",   "Dry/Wet",         0.f, 1.f, 1.f, 1.f, 0.01f, "%", 100.f, 0);
+    add ("out",   "Output",         -24.f, 12.f, 0.f, 1.f, 0.1f, "dB", 1.f, 1);
     return layout;
 }
 
@@ -54,7 +71,7 @@ void AdlibAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
         hpf[c].reset();
         shift1[c].prepare (sr);
         shift2[c].prepare (sr);
-        delay[c].prepare ((int) (sr * 1.2));
+        delay[c].prepare ((int) (sr * 3.0));
         fbLp[c] = 0.f;
     }
     delaySamples.reset (sr, 0.15);
@@ -87,7 +104,18 @@ void AdlibAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     const float rmix = get ("rmix"), width = get ("width"), mix = get ("mix");
     const float outGain = juce::Decibels::decibelsToGain (get ("out"));
 
-    delaySamples.setTargetValue ((float) (get ("dtime") * 0.001 * sr));
+    // темп из DAW (если хост не отдаёт — 120 BPM)
+    double bpm = 120.0;
+    if (auto* ph = getPlayHead())
+        if (auto pos = ph->getPosition())
+            if (auto b = pos->getBpm())
+                bpm = *b;
+    if (bpm < 20.0 || bpm > 400.0) bpm = 120.0;
+
+    const bool sync = get ("dsync") > 0.5f;
+    const int noteIdx = juce::jlimit (0, (int) kNoteNames.size() - 1, (int) std::round (get ("dnote")));
+    const double delayMs = sync ? (double) kNoteBeats[noteIdx] * 60000.0 / bpm : (double) get ("dtime");
+    delaySamples.setTargetValue (juce::jlimit (32.f, (float) (sr * 2.9), (float) (delayMs * 0.001 * sr)));
     for (int c = 0; c < 2; ++c) hpf[c].setCutoffFrequency (get ("hpf"));
 
     juce::Reverb::Parameters rp;
@@ -147,7 +175,7 @@ void AdlibAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
 juce::AudioProcessorEditor* AdlibAudioProcessor::createEditor()
 {
-    return new juce::GenericAudioProcessorEditor (*this);
+    return new AdlibEditor (*this);
 }
 
 void AdlibAudioProcessor::getStateInformation (juce::MemoryBlock& dest)
